@@ -3,7 +3,7 @@
 // Catalog validation. No dependencies, no credentials, no install step:
 //
 //   node .github/scripts/validate.ts                      # structure only, whole catalog
-//   node .github/scripts/validate.ts apps/io.github.me.thing.json   # + resolve its release
+//   node .github/scripts/validate.ts apps/me.thing.json   # + resolve its release
 //   node .github/scripts/validate.ts --changed            # + resolve what this PR touched
 //
 // Two passes, because they cost different amounts. Structure, ids, namespace proof and
@@ -27,14 +27,22 @@ const APPS = 'apps'
 
 // One id segment: lowercase alphanumerics, hyphens only on the inside. Uppercase is
 // rejected rather than folded — on a case-insensitive filesystem (macOS, where this is
-// developed) Foo.json and foo.json collide in a checkout but not in git.
-const SEGMENT = '[a-z0-9]+(?:-[a-z0-9]+)*'
+// developed) Foo.json and foo.json collide in a checkout but not in git. The no-edge-hyphen
+// rule is also what keeps the hostname encoding below reversible.
+const SEGMENT = '[a-z0-9](?:[a-z0-9-]*[a-z0-9])?'
 const ID_RE = new RegExp(`^${SEGMENT}(?:\\.${SEGMENT})+$`)
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+$/
 
-// The only namespace that can be proven today: io.github.<user>.<app> points at
-// github.com/<user>/…, so proof is a string comparison against the entry itself.
-const NAMESPACE = 'io.github.'
+// The app is always the last segment, so segment count alone says which namespace an id
+// claims: two is a GitHub login, three or more a reversed domain. Only the first can be
+// proven today, by string comparison against the repo the entry already names.
+const GITHUB_SEGMENTS = 2
+
+// The zone hosted apps are served from. Only used to make the report readable.
+const ROOT_DOMAIN = 'justapps.run'
+
+// The longest DNS label, and so the longest encodable id.
+const MAX_LABEL = 63
 
 // Rung 4 (no tags at all — resolved from default-branch HEAD) is first-party only until
 // the abuse model is proven. Everyone else pushes a tag; that is one command.
@@ -42,6 +50,19 @@ const FIRST_PARTY_OWNER = 'justfiles'
 
 const FIELDS = ['repo', 'asset', 'status', 'to', 'formerIds', 'note']
 const STATUSES = ['active', 'removed', 'renamed']
+
+// A hosted app gets its own origin, and a wildcard certificate matches exactly one label, so
+// the dotted id is inlined into a single one. This is IPFS's DNSLink encoding, which exists
+// for the same reason: https://specs.ipfs.tech/http-gateways/subdomain-gateway/
+//
+// Escaping the hyphen rather than the dot keeps the common case clean — justfiles.draw is
+// justfiles-draw, not justfiles--draw — while staying injective for the names that do carry
+// hyphens, which GitHub logins and punycoded IDN domains both do.
+//
+// Kept in step with apps/runner/src/id.ts in the private monorepo, which decodes it. This
+// repository has no dependencies by design, so the two implementations are duplicated rather
+// than shared; the encoding is two replacements and is specified upstream.
+const encodeLabel = (id: string) => id.replaceAll('-', '--').replaceAll('.', '-')
 
 interface Entry {
 	repo?: string
@@ -115,11 +136,23 @@ function checkStructure(item: Loaded): void {
 	if (!entry) return
 
 	if (!ID_RE.test(id)) {
-		fail(path, `"${id}" is not a lowercase reverse-DNS id`)
+		fail(path, `"${id}" is not a lowercase <publisher>.<app> id`)
 		return
 	}
-	if (!id.startsWith(NAMESPACE) || id.split('.').length < 4) {
-		fail(path, `"${id}" must be io.github.<user>.<app> — the only namespace provable today`)
+	if (id.split('.').length !== GITHUB_SEGMENTS) {
+		fail(
+			path,
+			`"${id}" must be <github-login>.<app> — a reversed domain such as com.alice.notes ` +
+				'needs DNS TXT proof, which is not implemented yet'
+		)
+		return
+	}
+	// The id is the hostname, so the DNS label limit binds the id. Checked here rather than
+	// left to the runner: a merged entry that cannot be served is a worse failure than a
+	// rejected pull request.
+	const label = encodeLabel(id)
+	if (label.length > MAX_LABEL) {
+		fail(path, `"${id}" encodes to a ${label.length}-character host label; the DNS limit is ${MAX_LABEL}`)
 		return
 	}
 	for (const key of Object.keys(entry)) {
@@ -161,9 +194,9 @@ function checkStructure(item: Loaded): void {
 	if (entry.repo) checkRepoField(item, entry.repo)
 }
 
-// The whole ownership model: the id names a GitHub account, and the entry points at a
-// repository owned by that account. There is no name to squat, so there is no transfer
-// policy, no abandonment policy and no dispute queue.
+// The whole ownership model: the id's publisher names a GitHub account, and the entry points
+// at a repository owned by that account. App names are scoped by publisher, so there is no
+// name to squat, and so no transfer policy, no abandonment policy and no dispute queue.
 function checkRepoField({ id, path }: Loaded, repo: string): void {
 	if (!REPO_RE.test(repo)) {
 		fail(path, `repo must be owner/name, got "${repo}"`)
@@ -174,9 +207,9 @@ function checkRepoField({ id, path }: Loaded, repo: string): void {
 		return
 	}
 	const owner = repo.split('/')[0].toLowerCase()
-	const namespace = id.split('.')[2]
-	if (owner !== namespace) {
-		fail(path, `namespace "${namespace}" does not own ${repo} — the id must be io.github.${owner}.<app>`)
+	const publisher = id.split('.')[0]
+	if (owner !== publisher) {
+		fail(path, `publisher "${publisher}" does not own ${repo} — the id must be ${owner}.<app>`)
 	}
 }
 
@@ -319,6 +352,7 @@ async function resolveLadder(item: Loaded): Promise<void> {
 	const lines: string[] = []
 	const say = (line: string) => lines.push(`  ${line}`)
 	say(`✓ ${item.id} — namespace proven, ${owner} owns both the id and the repo`)
+	say(`✓ hosted at ${encodeLabel(item.id)}.${ROOT_DOMAIN}`)
 
 	const repo = await api(`/repos/${seg(owner)}/${seg(name)}`)
 	if (repo.status === 404) {

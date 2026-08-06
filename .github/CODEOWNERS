@@ -1,7 +1,7 @@
 # CODEOWNERS only takes effect for users with write access to this repository, so it
 # cannot be used to give app authors review rights over their own entries — such lines
 # would be silently inert, and the file would grow by one line per author forever.
-# Ownership of an entry is proven instead by the id's namespace matching the repository
+# Ownership of an entry is proven instead by the id's publisher matching the repository
 # it points at, which the validator checks on every pull request.
 #
 # What is listed here is the executable and structural surface: the code that runs in CI

@@ -2,14 +2,14 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://github.com/justfiles/app-catalog/blob/main/schema/app.schema.json",
 	"title": "JustApps catalog entry",
-	"description": "One app. The filename is the app id, so there is no id field. Everything else about the app is discovered from its repository at import time. This schema is what your editor reads; the authority is .github/scripts/validate.ts, which also checks the things a schema cannot express (that the id matches the filename, that the namespace is provable, that renames link both ways).",
+	"description": "One app. The filename is the app id — <publisher>.<app> — so there is no id field. Everything else about the app is discovered from its repository at import time. This schema is what your editor reads; the authority is .github/scripts/validate.ts, which also checks the things a schema cannot express (that the id matches the filename, that the publisher is provable, that the id fits in a DNS label, that renames link both ways).",
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
 		"repo": {
 			"type": "string",
 			"pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$",
-			"description": "GitHub repository as owner/name. The owner must match the id's namespace: apps/io.github.alice.notes.json must point at alice/something."
+			"description": "GitHub repository as owner/name. The owner must match the id's publisher: apps/alice.notes.json must point at alice/something."
 		},
 		"asset": {
 			"type": "string",
@@ -23,7 +23,7 @@
 		},
 		"to": {
 			"type": "string",
-			"pattern": "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$",
+			"pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
 			"description": "Renamed entries only: the id that replaced this one. That entry must list this id in formerIds."
 		},
 		"formerIds": {
@@ -32,9 +32,9 @@
 			"minItems": 1,
 			"items": {
 				"type": "string",
-				"pattern": "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$"
+				"pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
 			},
-			"description": "Every id this app has previously been published under, including ids it inherited through an earlier rename. Devices use this to migrate installed state instead of losing it."
+			"description": "Every id this app has previously been published under, including ids it inherited through an earlier rename. Devices use this to migrate installed state instead of losing it. A rename also moves the app's hosted origin, so it does not carry anonymous browser data across."
 		},
 		"note": {
 			"type": "string",
@@ -58,7 +58,7 @@
 	],
 	"examples": [
 		{ "repo": "alice/calendar" },
-		{ "repo": "alice/notes", "formerIds": ["io.github.alice.notes"] },
+		{ "repo": "alice/notes", "formerIds": ["alice.notes"] },
 		{ "status": "renamed", "to": "com.aliceapps.notes" },
 		{ "repo": "alice/calendar", "status": "removed", "note": "malware, 2026-08-01" }
 	]

@@ -63,7 +63,7 @@ limits are enforced at extraction, and bundles containing secrets are rejected. 
 
 ## Known risks we are carrying deliberately
 
-**A freed GitHub username.** A namespace is proven against a GitHub account, so if an author
+**A freed GitHub username.** A publisher is proven against a GitHub account, so if an author
 renames or deletes their account, that login becomes available and the `owner/name` in an
 entry can come to point at a different person's repository. The importer records each
 repository's immutable numeric id alongside the entry and treats a change as a hard stop

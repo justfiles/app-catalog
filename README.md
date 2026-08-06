@@ -3,7 +3,7 @@
 The list of apps JustApps knows about. One file per app, and the filename is the app id:
 
 ```
-apps/io.github.justfiles.draw.json
+apps/justfiles.draw.json
 ```
 
 ```json
@@ -52,20 +52,40 @@ a published app down, and the exact bytes served are always recoverable.
 
 ## Ids and ownership
 
-An id is reverse-DNS, and its namespace has to be one you can prove. Today that means
-exactly one shape:
+An id is `<publisher>.<app>`, and the publisher has to be a namespace you can prove. Today
+that means exactly one shape:
 
 ```
-io.github.<your-github-user>.<app>
+<your-github-user>.<app>
 ```
 
-which is proven by a string comparison — `apps/io.github.alice.notes.json` must point at a
-repository owned by `alice`. No DNS lookup, no HTTP callback, nothing that can flake.
+which is proven by a string comparison — `apps/alice.notes.json` must point at a repository
+owned by `alice`. No DNS lookup, no HTTP callback, nothing that can flake.
 
-Because a namespace is a GitHub account you already own, there is no name to squat: no
-transfer policy, no abandonment policy, no dispute queue. Moving to a branded namespace
-later (`com.aliceapps.notes`) is a supported rename, not a re-registration —
-[CONTRIBUTING.md](CONTRIBUTING.md#renaming-an-app) describes it.
+Because a publisher is a GitHub account you already own, and app names are scoped inside it,
+there is no name to squat: no transfer policy, no abandonment policy, no dispute queue. Two
+authors can both ship `draw`. Moving to a branded namespace later (`com.aliceapps.notes`,
+proven by a DNS `TXT` record) is planned, and is a supported rename rather than a
+re-registration — [CONTRIBUTING.md](CONTRIBUTING.md#renaming-an-app) describes it.
+
+## The id is also the hostname
+
+A hosted app gets its own origin, and a wildcard certificate matches exactly one DNS label,
+so the dotted id is inlined into one:
+
+```
+justfiles.draw   →   https://justfiles-draw.justapps.run
+```
+
+The encoding is [IPFS's DNSLink inlining](https://specs.ipfs.tech/http-gateways/subdomain-gateway/),
+which exists for the same reason: every `-` becomes `--`, then every `.` becomes `-`. So
+`nib-health.draw` is `nib--health-draw`. There is no separate slug to claim and nothing to
+register — the hostname is a function of the id, which is a function of the filename.
+
+Two things follow. Your id has to fit: the encoded label is capped at 63 characters, and the
+validator checks that rather than letting a merged entry fail when someone tries to reach it.
+And every app label contains a hyphen, so plain names like `www` and `api` stay with the
+platform and can never be claimed.
 
 ## What is in here
 
@@ -79,8 +99,8 @@ later (`com.aliceapps.notes`) is a supported rename, not a re-registration —
 Run the checks with no install step and no credentials:
 
 ```sh
-node .github/scripts/validate.ts                                  # structure, whole catalog
-node .github/scripts/validate.ts apps/io.github.you.thing.json    # + resolve its release
+node .github/scripts/validate.ts                       # structure, whole catalog
+node .github/scripts/validate.ts apps/you.thing.json   # + resolve its release
 ```
 
 Node 24 runs the TypeScript directly.

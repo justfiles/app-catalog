@@ -20,23 +20,23 @@ get JustApps to serve bytes it has no right to serve.
 3. **Add one file** to `apps/`, named after your app id, containing the repository pointer:
 
    ```sh
-   echo '{ "repo": "alice/notes" }' > apps/io.github.alice.notes.json
+   echo '{ "repo": "alice/notes" }' > apps/alice.notes.json
    ```
 
 4. **Run the validator** and fix anything it reports:
 
    ```sh
-   node .github/scripts/validate.ts apps/io.github.alice.notes.json
+   node .github/scripts/validate.ts apps/alice.notes.json
    ```
 
 5. **Open a pull request from your own GitHub account** — the account named in the id. That
-   is how the namespace is proven, so a pull request opened by someone else cannot be merged.
+   is how the publisher is proven, so a pull request opened by someone else cannot be merged.
 
 ## The entry
 
 | Field | When | What |
 | --- | --- | --- |
-| `repo` | required, unless renamed | `owner/name` on GitHub. The owner must match your id's namespace. |
+| `repo` | required, unless renamed | `owner/name` on GitHub. The owner must match your id's publisher. |
 | `asset` | rare | Names the bundle when a release carries several archives. See [below](#which-asset). |
 | `status` | on retirement | `active` (the default — omit it), `removed`, or `renamed`. |
 | `to` | renamed only | The id that replaced this one. |
@@ -53,17 +53,35 @@ merges a pull request here.
 Your id is the filename, minus `.json`. There is no `id` field to contradict it, and the
 filesystem makes two entries claiming the same id impossible.
 
+- **`<publisher>.<app>`** — `alice.notes`. The publisher is your GitHub user or org, and it
+  must own the repository the entry points at. That is the only provable publisher today.
 - **Lowercase.** `Notes.json` and `notes.json` are the same file on macOS but different
   files in git, so uppercase is rejected outright rather than left to surface later.
-- **Reverse-DNS**, dot-separated, hyphens allowed inside a segment.
-- **`io.github.<user>.<app>`** — the only provable namespace today. `<user>` must own the
-  repository the entry points at.
+- **Hyphens are allowed inside a segment**, but not at either end: `alice.pdf-viewer` is
+  fine, `alice.-viewer` is not.
+
+App names are scoped by publisher, so you are not competing for one. Pick the obvious name —
+if someone else already ships a `draw`, yours can be `draw` too.
 
 Custom domains (`com.aliceapps.notes`, proven by a DNS `TXT` record) are planned, and are
-deliberately not a launch feature: everyone is served by `io.github.*`, and moving later is
-a supported [rename](#renaming-an-app).
+deliberately not a launch feature: everyone is served by `<your-github-user>.*` in the
+meantime. Entries with three or more segments are rejected until that proof exists.
 
-The id is your app's identity on every device that installs it — it keys stored data and
+### Your id is your app's hostname
+
+A hosted app gets its own origin, and the id is inlined into a single DNS label to produce it:
+
+```
+alice.notes       →   https://alice-notes.justapps.run
+alice.pdf-viewer  →   https://alice-pdf--viewer.justapps.run
+```
+
+Every `-` becomes `--`, then every `.` becomes `-`. This is
+[IPFS's DNSLink inlining](https://specs.ipfs.tech/http-gateways/subdomain-gateway/), and it
+means there is no separate name to claim: the hostname falls out of the id. The encoded label
+cannot exceed 63 characters, which the validator checks.
+
+The id is also your app's identity on every device that installs it — it keys stored data and
 granted capabilities. Choose one you can live with, and change it only through a rename.
 
 ## Publishing releases
@@ -196,29 +214,31 @@ public URL on a JustApps domain.
 
 ## Renaming an app
 
-Renaming is designed in — it is what makes `io.github.*` safe to recommend as a starting
-point. One pull request, two files:
+Renaming is designed in — it is what makes `<your-github-user>.*` safe to recommend as a
+starting point. One pull request, two files:
 
 ```json
 // apps/com.aliceapps.notes.json  — the new entry, claiming its history
-{ "repo": "alice/notes", "formerIds": ["io.github.alice.notes"] }
+{ "repo": "alice/notes", "formerIds": ["alice.notes"] }
 ```
 
 ```json
-// apps/io.github.alice.notes.json  — the old entry, now a tombstone
+// apps/alice.notes.json  — the old entry, now a tombstone
 { "status": "renamed", "to": "com.aliceapps.notes" }
 ```
 
 **Never delete the old file.** Deleting it makes the old id claimable again — and it is an id
 that installed devices already trust. Squatting an abandoned id is bad; squatting one with an
 install base is the worst outcome this catalog can produce. The tombstone is what keeps the
-id unclaimable, and the validator rejects any pull request that deletes an entry.
+id unclaimable, and the validator rejects any pull request that deletes an entry. It keeps the
+old *hostname* unclaimable too, which matters just as much: `alice-notes.justapps.run` holds
+the browser data of everyone who used the hosted app.
 
 Rules:
 
 - **Renames always get human review.** This is the highest-risk operation here, precisely
   because it is how an established app's install base would be hijacked. Nothing auto-merges.
-- **Both namespaces must be provable by you**, the pull-request author: the old one against
+- **Both publishers must be provable by you**, the pull-request author: the old one against
   the entry's current repository, the new one against the new repository. If you are also
   moving the app to a different repository, do that in a *separate, earlier* pull request so
   the old proof still holds when it is checked.
@@ -231,6 +251,12 @@ Rules:
 On device, a rename migrates installed state — data and granted capabilities move to the new
 id rather than the app vanishing and an unrelated one appearing. That is why the tombstone and
 `formerIds` are load-bearing rather than bookkeeping.
+
+**A rename does not carry hosted data across.** The id determines the hostname, the hostname is
+the browser's storage key, and nothing on our side can reach an anonymous visitor's IndexedDB
+on an origin they will never load again. Renaming an app that is live at a `justapps.run`
+address strands whatever people stored there. Rename before that address has users, or accept
+the loss deliberately.
 
 ## Removing an app
 
@@ -251,9 +277,9 @@ are reporting someone else's, do not open a pull request — see [SECURITY.md](S
 `node .github/scripts/validate.ts` runs the same checks CI runs. It needs no credentials and
 no install step, and it is the complete list of what can be checked before merge:
 
-- the filename is a lowercase reverse-DNS id in a provable namespace;
+- the filename is a lowercase `<publisher>.<app>` id that fits in a DNS label once encoded;
 - the JSON parses, has no unknown fields, and satisfies its status's rules;
-- the namespace owns the repository the entry names;
+- the publisher owns the repository the entry names;
 - no entry file is being deleted;
 - renames link both ways, chains terminate, and no chain loops;
 - the repository is reachable, public and licensed;
@@ -268,7 +294,7 @@ findable. It is not a statement that the app is safe.
 Set `GITHUB_TOKEN` if you hit the unauthenticated GitHub rate limit of 60 requests an hour:
 
 ```sh
-GITHUB_TOKEN=$(gh auth token) node .github/scripts/validate.ts apps/io.github.you.thing.json
+GITHUB_TOKEN=$(gh auth token) node .github/scripts/validate.ts apps/you.thing.json
 ```
 
 The repository has no dependencies and no `node_modules`, so there is nothing to install and
@@ -279,7 +305,7 @@ to resolve the `node:` imports; nothing in CI does.
 
 Everything mechanical is done by the time a human looks, so review is one judgement call:
 **is this a legitimate app?** Not whether the JSON is right, not whether the tag exists, not
-whether you own the namespace — those are already green or the pull request is already red.
+whether you own the publisher — those are already green or the pull request is already red.
 
 Updates to an existing entry auto-merge when everything is green. Human review is required
 for a new app, and for any change to the id, the source repository, ownership, entry points

@@ -20,8 +20,8 @@ body:
     id: app-id
     attributes:
       label: App id
-      description: As it appears in `apps/`, e.g. io.github.alice.notes
-      placeholder: io.github.alice.notes
+      description: As it appears in `apps/`, e.g. alice.notes
+      placeholder: alice.notes
     validations:
       required: true
 

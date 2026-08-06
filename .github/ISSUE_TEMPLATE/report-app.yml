@@ -1,0 +1,58 @@
+name: Report an app
+description: Report a catalog app as malicious, impersonating, or distributed without the right to do so.
+title: 'Report: '
+labels: ['report']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Stop if disclosing this publicly would arm an attacker** — an app abusing a runtime
+        hole, a capability escape, or a live credential in a published bundle. Report those
+        privately via the **Security** tab → *Report a vulnerability*, or <hi@xiaoxing.dev>.
+        See [SECURITY.md](https://github.com/justfiles/app-catalog/blob/main/SECURITY.md).
+
+        This form is for reports that are safe to make in public: obvious malware,
+        impersonation, or a licence violation.
+
+        A bug in an app is not a report — open it in the app's own repository.
+
+  - type: input
+    id: app-id
+    attributes:
+      label: App id
+      description: As it appears in `apps/`, e.g. io.github.alice.notes
+      placeholder: io.github.alice.notes
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is wrong
+      options:
+        - Malware or otherwise hostile behaviour
+        - Impersonates another app, author or brand
+        - Distributed without the right to (licence violation)
+        - Contains someone else's secrets or private data
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Release or version
+      description: Which release you looked at. A tag is ideal.
+      placeholder: v1.2.0
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What you observed
+      description: |
+        What the app does, and how you know. A link to the offending code or a reproduction
+        is worth more than a description. Do not paste live credentials — say where they are.
+    validations:
+      required: true

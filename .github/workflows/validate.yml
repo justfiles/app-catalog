@@ -1,0 +1,41 @@
+name: validate
+
+# Catalog pull requests are untrusted input, so this job is `pull_request` (not
+# `pull_request_target`), reads a token that can only read, and never deploys, publishes
+# or touches JustApps infrastructure. The only network it reaches is the GitHub API, and
+# only to look up repositories a contributor named.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # fetch-depth: 0 so `--changed` has a base branch to diff against. Only actions
+      # published by GitHub itself are used by tag; any third-party action added later
+      # must be pinned to a full commit SHA.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      # Node runs the TypeScript directly — no install step, no lockfile, no node_modules
+      # for a reviewer to have to trust. Contributor input reaches the script as argv, not
+      # as shell text.
+      - name: Validate entries
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/validate.ts --changed

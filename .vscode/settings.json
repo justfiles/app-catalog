@@ -1,0 +1,10 @@
+{
+	// Entries get autocomplete and inline errors without carrying a $schema key each.
+	"json.schemas": [
+		{
+			"fileMatch": ["apps/*.json"],
+			"url": "./schema/app.schema.json"
+		}
+	],
+	"files.insertFinalNewline": true
+}

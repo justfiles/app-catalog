@@ -1,0 +1,65 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/justfiles/app-catalog/blob/main/schema/app.schema.json",
+	"title": "JustApps catalog entry",
+	"description": "One app. The filename is the app id, so there is no id field. Everything else about the app is discovered from its repository at import time. This schema is what your editor reads; the authority is .github/scripts/validate.ts, which also checks the things a schema cannot express (that the id matches the filename, that the namespace is provable, that renames link both ways).",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"repo": {
+			"type": "string",
+			"pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$",
+			"description": "GitHub repository as owner/name. The owner must match the id's namespace: apps/io.github.alice.notes.json must point at alice/something."
+		},
+		"asset": {
+			"type": "string",
+			"pattern": "^[^/\\\\]+\\.zip$",
+			"description": "Escape hatch for repositories that publish several archives on one release. Omit it: with a single *.zip on the release the importer already picks the right one, whatever it is called. A name that stops matching is reported, not fatal."
+		},
+		"status": {
+			"enum": ["active", "removed", "renamed"],
+			"default": "active",
+			"description": "active (the default, omit it), removed (delisted; the entry stays so the id stays unclaimable), renamed (a tombstone pointing at the id that replaced this one)."
+		},
+		"to": {
+			"type": "string",
+			"pattern": "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$",
+			"description": "Renamed entries only: the id that replaced this one. That entry must list this id in formerIds."
+		},
+		"formerIds": {
+			"type": "array",
+			"uniqueItems": true,
+			"minItems": 1,
+			"items": {
+				"type": "string",
+				"pattern": "^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$"
+			},
+			"description": "Every id this app has previously been published under, including ids it inherited through an earlier rename. Devices use this to migrate installed state instead of losing it."
+		},
+		"note": {
+			"type": "string",
+			"minLength": 1,
+			"description": "Why. Required on removed entries; a dated one-liner is enough."
+		}
+	},
+	"allOf": [
+		{
+			"if": { "properties": { "status": { "enum": ["active"] } } },
+			"then": { "required": ["repo"] }
+		},
+		{
+			"if": { "properties": { "status": { "const": "renamed" } }, "required": ["status"] },
+			"then": { "required": ["to"] }
+		},
+		{
+			"if": { "properties": { "status": { "const": "removed" } }, "required": ["status"] },
+			"then": { "required": ["note"] }
+		}
+	],
+	"examples": [
+		{ "repo": "alice/calendar" },
+		{ "repo": "alice/notes", "formerIds": ["io.github.alice.notes"] },
+		{ "status": "renamed", "to": "com.aliceapps.notes" },
+		{ "repo": "alice/calendar", "status": "removed", "note": "malware, 2026-08-01" }
+	]
+}
